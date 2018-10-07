@@ -30,7 +30,7 @@ The forcing data are loaded from subdirectories:
 """
 from thetis import *
 from bathymetry import *
-from tidal_forcing import TidalBoundaryForcing
+from tidal_forcing import TPXOTidalBoundaryForcing
 from diagnostics import *
 from ncom_forcing import NCOMInterpolator
 from atm_forcing import *
@@ -192,6 +192,8 @@ atm_interp = ATMInterpolator(
     wind_stress_2d, atm_pressure_2d, atm_pattern, init_date)
 atm_interp.set_fields(0.0)
 
+solver_obj.create_fields()
+
 # ocean initial conditions
 # FIXME these should be CG fields
 # NOTE velocity splitting fails with CG fields?
@@ -215,15 +217,22 @@ oce_bnd_interp = NCOMInterpolator(
 oce_bnd_interp.set_fields(0.0)
 
 # tides
-elev_tide_2d = Function(bathymetry_2d.function_space(), name='Boundary elevation')
+elev_tide_2d = Function(solver_obj.function_spaces.P1_2d, name='Tidal elevation')
+UV_tide_2d = Function(solver_obj.function_spaces.P1v_2d, name='Tidal transport')
+UV_tide_3d = Function(solver_obj.function_spaces.P1v, name='Tidal transport')
 bnd_time = Constant(0)
 
 ramp_t = 12*3600.
 elev_ramp = conditional(le(bnd_time, ramp_t), bnd_time/ramp_t, 1.0)
-elev_bnd_expr = elev_ramp*elev_tide_2d
+tide_elev_expr_2d = elev_ramp*elev_tide_2d
+depth_2d = solver_obj.fields.bathymetry_2d + solver_obj.fields.elev_cg_2d
+depth_3d = solver_obj.fields.bathymetry_3d + solver_obj.fields.elev_cg_3d
+tide_uv_expr_2d = elev_ramp*UV_tide_2d/depth_2d
+tide_uv_expr_3d = elev_ramp*UV_tide_3d/depth_3d
 
-bnd_elev_updater = TidalBoundaryForcing(
+tide_bnd_interp = TPXOTidalBoundaryForcing(
     elev_tide_2d, init_date,
+    uv_field=UV_tide_2d, data_dir='forcings',
     boundary_ids=[north_bnd_id, west_bnd_id, south_bnd_id])
 
 # river temperature and volume flux
@@ -237,19 +246,21 @@ river_temp_interp = interpolation.NetCDFTimeSeriesInterpolator(
 river_temp_const = Constant(river_temp_interp(0)[0])
 
 river_swe_funcs = {'flux': river_flux_const}
-tide_elev_funcs = {'elev': elev_bnd_expr, 'uv': uv_bnd_2d}
-south_elev_funcs = {'elev': elev_bnd_expr}
+ocean_tide_funcs = {'elev': tide_elev_expr_2d, 'uv': uv_bnd_2d + tide_uv_expr_2d}
+south_tide_funcs = {'elev': tide_elev_expr_2d}
+west_tide_funcs = {'uv': uv_bnd_2d}
 open_uv_funcs = {'symm': None}
 bnd_river_salt = {'value': Constant(salt_river)}
-ocean_salt_funcs = {'value': salt_bnd_3d, 'uv': uv_bnd_3d + uv_bnd_dav_3d}
+uv_bnd_sum_3d = uv_bnd_3d + uv_bnd_dav_3d + tide_uv_expr_3d
+ocean_salt_funcs = {'value': salt_bnd_3d, 'uv': uv_bnd_sum_3d}
 bnd_river_temp = {'value': river_temp_const}
-ocean_temp_funcs = {'value': temp_bnd_3d, 'uv': uv_bnd_3d + uv_bnd_dav_3d}
-ocean_uv_funcs = {'uv': uv_bnd_3d + uv_bnd_dav_3d}
+ocean_temp_funcs = {'value': temp_bnd_3d, 'uv': uv_bnd_sum_3d}
+ocean_uv_funcs = {'uv': uv_bnd_sum_3d}
 solver_obj.bnd_functions['shallow_water'] = {
     river_bnd_id: river_swe_funcs,
-    south_bnd_id: tide_elev_funcs,
-    north_bnd_id: tide_elev_funcs,
-    west_bnd_id: tide_elev_funcs,
+    south_bnd_id: ocean_tide_funcs,
+    north_bnd_id: ocean_tide_funcs,
+    west_bnd_id: west_tide_funcs,
 }
 solver_obj.bnd_functions['momentum'] = {
     river_bnd_id: open_uv_funcs,
@@ -269,8 +280,6 @@ solver_obj.bnd_functions['temp'] = {
     north_bnd_id: ocean_temp_funcs,
     west_bnd_id: ocean_temp_funcs,
 }
-
-solver_obj.create_fields()
 
 # add relaxation terms for T, S, uv
 # dT/dt ... - 1/tau*(T_relax - T) = 0
@@ -350,6 +359,7 @@ uv_bnd_averager = VerticalIntegrator(uv_bnd_3d,
                                      elevation=solver_obj.fields.elev_cg_3d)
 extract_uv_bnd = SubFunctionExtractor(uv_bnd_dav_3d, uv_bnd_2d)
 copy_uv_bnd_dav_to_3d = ExpandFunctionTo3d(uv_bnd_2d, uv_bnd_dav_3d)
+copy_uv_tide_to_3d = ExpandFunctionTo3d(UV_tide_2d, UV_tide_3d)
 
 
 def split_3d_bnd_velocity():
@@ -419,7 +429,8 @@ solver_obj.assign_initial_conditions(salt=salt_bnd_3d, temp=temp_bnd_3d,
 
 def update_forcings(t):
     bnd_time.assign(t)
-    bnd_elev_updater.set_tidal_field(t)
+    tide_bnd_interp.set_tidal_field(t)
+    copy_uv_tide_to_3d.solve()
     river_flux_const.assign(river_flux_interp(t)[0])
     river_temp_const.assign(river_temp_interp(t)[0])
     oce_bnd_interp.set_fields(t)
