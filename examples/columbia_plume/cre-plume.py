@@ -168,7 +168,7 @@ solver_obj.create_function_spaces()
 # additional diffusion at ocean boundary
 viscosity_bnd_2d = solver_obj.function_spaces.P1_2d.get_work_function()
 viscosity_bnd_3d = Function(solver_obj.function_spaces.P1, name='visc_bnd_3d')
-visc_bnd_dist = 30e3
+visc_bnd_dist = 60e3
 visc_bnd_value = 80.0
 get_boundary_relaxation_field(viscosity_bnd_2d,
                               [north_bnd_id, west_bnd_id, south_bnd_id],
@@ -177,7 +177,7 @@ viscosity_bnd_2d.assign(viscosity_bnd_2d + options.horizontal_viscosity)
 ExpandFunctionTo3d(viscosity_bnd_2d, viscosity_bnd_3d).solve()
 # File('bnd_visc.pvd').write(viscosity_bnd_2d)
 solver_obj.function_spaces.P1_2d.restore_work_function(viscosity_bnd_2d)
-# options.horizontal_viscosity = viscosity_bnd_3d
+options.horizontal_viscosity = viscosity_bnd_3d
 
 # atm forcing
 wind_stress_3d = Function(solver_obj.function_spaces.P1v, name='wind stress')
@@ -252,39 +252,40 @@ river_temp_const = Constant(river_temp_interp(0)[0])
 
 river_swe_funcs = {'flux': river_flux_const}
 ocean_tide_funcs = {'elev': tide_elev_expr_2d, 'uv': uv_bnd_2d + tide_uv_expr_2d}
-south_tide_funcs = {'elev': tide_elev_expr_2d}
-# west_tide_funcs = {'uv': uv_bnd_2d}
+west_tide_funcs = {'elev': tide_elev_expr_2d, 'uv': tide_uv_expr_2d}
 open_uv_funcs = {'symm': None}
 bnd_river_salt = {'value': Constant(salt_river)}
 uv_bnd_sum_3d = uv_bnd_3d + uv_bnd_dav_3d + tide_uv_expr_3d
 ocean_salt_funcs = {'value': salt_bnd_3d, 'uv': uv_bnd_sum_3d}
+west_salt_funcs = {'value': salt_bnd_3d, 'uv': tide_uv_expr_3d}
 bnd_river_temp = {'value': river_temp_const}
 ocean_temp_funcs = {'value': temp_bnd_3d, 'uv': uv_bnd_sum_3d}
-# ocean_uv_funcs = {'uv': uv_bnd_sum_3d}
+west_temp_funcs = {'value': temp_bnd_3d, 'uv': tide_uv_expr_3d}
 ocean_uv_funcs = {'uv': uv_bnd_sum_3d, 'baroc_head': bnd_baroc_head_expr}
+west_uv_funcs = {'uv': tide_uv_expr_3d, 'baroc_head': bnd_baroc_head_expr}
 solver_obj.bnd_functions['shallow_water'] = {
     river_bnd_id: river_swe_funcs,
     south_bnd_id: ocean_tide_funcs,
     north_bnd_id: ocean_tide_funcs,
-    west_bnd_id: ocean_tide_funcs,
+    west_bnd_id: west_tide_funcs,
 }
 solver_obj.bnd_functions['momentum'] = {
     river_bnd_id: open_uv_funcs,
     south_bnd_id: ocean_uv_funcs,
     north_bnd_id: ocean_uv_funcs,
-    west_bnd_id: ocean_uv_funcs,
+    west_bnd_id: west_uv_funcs,
 }
 solver_obj.bnd_functions['salt'] = {
     river_bnd_id: bnd_river_salt,
     south_bnd_id: ocean_salt_funcs,
     north_bnd_id: ocean_salt_funcs,
-    west_bnd_id: ocean_salt_funcs,
+    west_bnd_id: west_salt_funcs,
 }
 solver_obj.bnd_functions['temp'] = {
     river_bnd_id: bnd_river_temp,
     south_bnd_id: ocean_temp_funcs,
     north_bnd_id: ocean_temp_funcs,
-    west_bnd_id: ocean_temp_funcs,
+    west_bnd_id: west_temp_funcs,
 }
 
 # add relaxation terms for T, S, uv
@@ -306,9 +307,9 @@ get_boundary_relaxation_field(mask_tmp_2d,
 ExpandFunctionTo3d(mask_tmp_2d, mask_uv_relax_3d).solve()
 solver_obj.function_spaces.P1_2d.restore_work_function(mask_tmp_2d)
 # File('mask.pvd').write(mask_tracer_relax_3d)
-options.temperature_source_3d = mask_tracer_relax_3d*(temp_bnd_3d - solver_obj.fields.temp_3d)
-options.salinity_source_3d = mask_tracer_relax_3d*(salt_bnd_3d - solver_obj.fields.salt_3d)
-options.momentum_source_3d = mask_uv_relax_3d*(uv_bnd_3d - solver_obj.fields.uv_3d)
+# options.temperature_source_3d = mask_tracer_relax_3d*(temp_bnd_3d - solver_obj.fields.temp_3d)
+# options.salinity_source_3d = mask_tracer_relax_3d*(salt_bnd_3d - solver_obj.fields.salt_3d)
+# options.momentum_source_3d = mask_uv_relax_3d*(uv_bnd_3d - solver_obj.fields.uv_3d)
 
 solver_obj.create_equations()
 
