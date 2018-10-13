@@ -203,6 +203,7 @@ uvel_bnd_3d = Function(solver_obj.function_spaces.P1DG, name='NCOM u velocity')
 vvel_bnd_3d = Function(solver_obj.function_spaces.P1DG, name='NCOM v velocity')
 density_bnd_3d = Function(solver_obj.function_spaces.P1DG, name='NCOM density')
 baroc_head_bnd_3d = Function(solver_obj.function_spaces.P1DG, name='NCOM baroclinic head')
+ncom_vel_mask_3d = Function(solver_obj.function_spaces.P1DG, name='NCOM velocity mask')
 
 uv_bnd_3d = Function(solver_obj.function_spaces.P1DGv, name='NCOM velocity')
 uv_bnd_2d = Function(solver_obj.function_spaces.P1DGv_2d, name='NCOM velocity')
@@ -216,7 +217,13 @@ oce_bnd_interp = NCOMInterpolator(
     'forcings/ncom/{year:04d}/{fieldstr:}/{fieldstr:}.glb8_2f_{year:04d}{month:02d}{day:02d}00.nc',
     init_date
 )
-oce_bnd_interp.set_fields(0.0)
+
+
+def interp_ocean_bnd(time):
+    oce_bnd_interp.set_fields(time)
+    uvel_bnd_3d.assign(uvel_bnd_3d*ncom_vel_mask_3d)
+    vvel_bnd_3d.assign(vvel_bnd_3d*ncom_vel_mask_3d)
+    
 
 # tides
 elev_tide_2d = Function(solver_obj.function_spaces.P1_2d, name='Tidal elevation')
@@ -312,6 +319,11 @@ solver_obj.function_spaces.P1_2d.restore_work_function(mask_tmp_2d)
 # options.momentum_source_3d = mask_uv_relax_3d*(uv_bnd_3d - solver_obj.fields.uv_3d)
 
 solver_obj.create_equations()
+
+vel_mask_bath_min = 20.0
+vel_mask_bath_max = 500.0
+ncom_vel_mask_3d.interpolate(0.5*tanh(3*(2*(solver_obj.fields.bathymetry_3d-vel_mask_bath_min)/(vel_mask_bath_max-vel_mask_bath_min)-1)) + 0.5)
+interp_ocean_bnd(0.0)
 
 station_list = [
     ('tpoin', ['elev_2d'], 440659., 5117484., None),
