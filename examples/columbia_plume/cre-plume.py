@@ -78,8 +78,9 @@ nprisms = ntriangles*nlayers
 
 sim_tz = timezone.FixedTimeZone(-8, 'PST')
 init_date = datetime.datetime(2006, 5, 1, tzinfo=sim_tz)
+end_date = datetime.datetime(2006, 7, 2, tzinfo=sim_tz)
 
-t_end = 52*24*3600.
+t_end = (end_date - init_date).total_seconds()
 t_export = 900.
 
 # interpolate bathymetry and smooth it
