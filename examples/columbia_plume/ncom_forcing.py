@@ -74,10 +74,10 @@ class SpatialInterpolatorNCOM3d(SpatialInterpolator):
         lat_max = self.latlonz_array[:, 0].max() + buffer
         lon_min = self.latlonz_array[:, 1].min() - buffer
         lon_max = self.latlonz_array[:, 1].max() + buffer
-        mask_cover[(lat >= lat_min) *
-                   (lat <= lat_max) *
-                   (lon >= lon_min) *
-                   (lon <= lon_max)] = True
+        mask_cover[(lat >= lat_min)
+                   * (lat <= lat_max)
+                   * (lon >= lon_min)
+                   * (lon <= lon_max)] = True
         mask_cover *= mask_good_values
         # include nearest valid neighbors
         # needed for nearest neighbor filling
@@ -180,8 +180,8 @@ class NCOMInterpolator(object):
             ti = interpolation.LinearTimeInterpolator(ts, r)
             self.time_interpolator[ncvarname] = ti
         # construct velocity rotation object
-        self.rotate_velocity = ('U_Velocity' in field_names and
-                                'V_Velocity' in field_names)
+        self.rotate_velocity = ('U_Velocity' in field_names
+                                and 'V_Velocity' in field_names)
         self.scalar_field_names = list(self.field_names)
         if self.rotate_velocity:
             self.scalar_field_names.remove('U_Velocity')

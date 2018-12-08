@@ -138,8 +138,7 @@ def get_boundary_relaxation_field(mask_func, bnd_id, dist_scale,
     fs = mask_func.function_space()
     test = TestFunction(fs)
     f = inner(mask_func, test)*dx
-    f += (dist_scale**2 *
-          inner(grad(mask_func), grad(test))*dx)
+    f += (dist_scale**2 * inner(grad(mask_func), grad(test))*dx)
     bc = DirichletBC(fs, 1.0, bnd_id)
     prob = NonlinearVariationalProblem(f, mask_func, bcs=[bc])
     solver = NonlinearVariationalSolver(prob)
